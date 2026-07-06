@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oasis Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sand: #EAE0C8;
+    --sand-dark: #CBB98F;
+    --clay: #B8693F;
+    --clay-dark: #954F2D;
+    --ink: #2A241A;
+    --teal: #1F6F6B;
+    --teal-dark: #164F4C;
+    --mint: #DCEAE0;
+    --card: #F5EFDE;
+  }
+
+  *{ box-sizing:border-box; }
+
+  body{
+    margin:0;
+    background:var(--sand);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+  }
+
+  /* Banner */
+  header.banner{
+    position:relative;
+    background:linear-gradient(180deg, var(--teal) 0%, var(--teal-dark) 100%);
+    color:var(--mint);
+    padding:2.6rem 1.5rem 3.4rem;
+    text-align:center;
+    overflow:hidden;
+  }
+
+  header.banner h1{
+    font-family:'Fraunces', serif;
+    font-weight:700;
+    font-size:clamp(2rem, 5vw, 3.2rem);
+    letter-spacing:0.02em;
+    margin:0;
+    position:relative;
+    z-index:2;
+  }
+
+  header.banner p.tagline{
+    margin:0.5rem 0 0;
+    font-size:0.95rem;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:#B9D9CD;
+    position:relative;
+    z-index:2;
+  }
+
+  /* Oasis dune divider - signature element */
+  .dune{
+    position:absolute;
+    bottom:-1px; left:0; right:0;
+    height:48px;
+    background:var(--sand);
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 60' preserveAspectRatio='none'><path d='M0,40 C150,10 300,55 450,30 C600,5 750,55 900,25 C1050,0 1150,35 1200,20 L1200,60 L0,60 Z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 60' preserveAspectRatio='none'><path d='M0,40 C150,10 300,55 450,30 C600,5 750,55 900,25 C1050,0 1150,35 1200,20 L1200,60 L0,60 Z'/></svg>");
+    -webkit-mask-size:100% 100%;
+    mask-size:100% 100%;
+  }
+
+  main{
+    max-width:960px;
+    margin:0 auto;
+    padding:0 1.5rem 4rem;
+  }
+
+  /* Tabs */
+  nav.tabs{
+    display:flex;
+    gap:0.5rem;
+    margin-top:1.6rem;
+    border-bottom:2px solid var(--sand-dark);
+    flex-wrap:wrap;
+  }
+
+  nav.tabs button{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-weight:600;
+    font-size:0.95rem;
+    background:none;
+    border:none;
+    padding:0.85rem 1.1rem;
+    color:#7A6E52;
+    cursor:pointer;
+    position:relative;
+    top:2px;
+    transition:color 0.2s ease;
+  }
+
+  nav.tabs button:hover{ color:var(--clay-dark); }
+
+  nav.tabs button.active{
+    color:var(--ink);
+    border-bottom:3px solid var(--clay);
+  }
+
+  /* Panels */
+  section.panel{
+    display:none;
+    padding-top:1.8rem;
+    animation:fade 0.25s ease;
+  }
+  section.panel.active{ display:block; }
+
+  @keyframes fade{
+    from{ opacity:0; transform:translateY(4px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+
+  .panel-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:1.2rem;
+  }
+
+  .panel-head h2{
+    font-family:'Fraunces', serif;
+    font-size:1.4rem;
+    margin:0;
+  }
+
+  button.add-btn{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-weight:600;
+    font-size:0.9rem;
+    background:var(--clay);
+    color:#fff;
+    border:none;
+    padding:0.6rem 1rem;
+    border-radius:6px;
+    cursor:pointer;
+    transition:background 0.2s ease, transform 0.1s ease;
+  }
+  button.add-btn:hover{ background:var(--clay-dark); }
+  button.add-btn:active{ transform:scale(0.97); }
+
+  /* Category cards */
+  .categories{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));
+    gap:1rem;
+  }
+
+  .category{
+    background:var(--card);
+    border:1px solid var(--sand-dark);
+    border-radius:10px;
+    padding:1rem 1.1rem 1.2rem;
+  }
+
+  .category-top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:0.6rem;
+  }
+
+  .category-top h3{
+    font-family:'Fraunces', serif;
+    font-size:1.05rem;
+    margin:0;
+    word-break:break-word;
+  }
+
+  .icon-btn{
+    background:none;
+    border:none;
+    cursor:pointer;
+    color:#9A8C6A;
+    font-size:1rem;
+    line-height:1;
+    padding:0.15rem 0.3rem;
+  }
+  .icon-btn:hover{ color:var(--clay-dark); }
+
+  .items{
+    list-style:none;
+    margin:0 0 0.6rem;
+    padding:0;
+    display:flex;
+    flex-direction:column;
+    gap:0.4rem;
+  }
+
+  .items li{
+    display:flex;
+    align-items:center;
+    gap:0.5rem;
+    font-size:0.9rem;
+    color:#4A4331;
+  }
+
+  .items li input[type="checkbox"]{
+    accent-color:var(--teal);
+  }
+
+  .items li.done span{
+    text-decoration:line-through;
+    color:#9A8C6A;
+  }
+
+  .item-form{
+    display:flex;
+    gap:0.4rem;
+  }
+
+  .item-form input{
+    flex:1;
+    border:1px solid var(--sand-dark);
+    border-radius:6px;
+    padding:0.4rem 0.5rem;
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:0.85rem;
+    background:#fff;
+  }
+
+  .item-form button{
+    border:none;
+    background:var(--teal);
+    color:#fff;
+    border-radius:6px;
+    padding:0.4rem 0.7rem;
+    font-size:0.85rem;
+    cursor:pointer;
+  }
+  .item-form button:hover{ background:var(--teal-dark); }
+
+  .empty-state{
+    color:#8A7C5E;
+    font-size:0.9rem;
+    padding:1.2rem 0;
+    text-align:center;
+    border:1px dashed var(--sand-dark);
+    border-radius:10px;
+  }
+
+  footer{
+    text-align:center;
+    color:#8A7C5E;
+    font-size:0.8rem;
+    padding:1.5rem;
+  }
+</style>
+</head>
+<body>
+
+<header class="banner">
+  <h1>Oasis Tracker</h1>
+  <p class="tagline">Gang House &middot; Warehouse 1 &middot; Warehouse 2</p>
+  <div class="dune"></div>
+</header>
+
+<main>
+  <nav class="tabs" id="tabs"></nav>
+  <div id="panels"></div>
+</main>
+
+<footer>Oasis Tracker &mdash; data is saved in this browser</footer>
+
+<script>
+  const TABS = [
+    { id: 'gang-house', label: 'Gang House' },
+    { id: 'warehouse-1', label: 'Warehouse 1' },
+    { id: 'warehouse-2', label: 'Warehouse 2' }
+  ];
+
+  const STORAGE_KEY = 'oasis-tracker-data';
+
+  function loadData(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    const fresh = {};
+    TABS.forEach(t => fresh[t.id] = []);
+    return fresh;
+  }
+
+  function saveData(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  let data = loadData();
+  TABS.forEach(t => { if(!data[t.id]) data[t.id] = []; });
+
+  let activeTab = TABS[0].id;
+
+  const tabsEl = document.getElementById('tabs');
+  const panelsEl = document.getElementById('panels');
+
+  function render(){
+    tabsEl.innerHTML = '';
+    TABS.forEach(t => {
+      const btn = document.createElement('button');
+      btn.textContent = t.label;
+      if(t.id === activeTab) btn.classList.add('active');
+      btn.addEventListener('click', () => { activeTab = t.id; render(); });
+      tabsEl.appendChild(btn);
+    });
+
+    panelsEl.innerHTML = '';
+    TABS.forEach(t => {
+      const panel = document.createElement('section');
+      panel.className = 'panel' + (t.id === activeTab ? ' active' : '');
+
+      const head = document.createElement('div');
+      head.className = 'panel-head';
+      const h2 = document.createElement('h2');
+      h2.textContent = t.label;
+      const addBtn = document.createElement('button');
+      addBtn.className = 'add-btn';
+      addBtn.textContent = '+ Add Category';
+      addBtn.addEventListener('click', () => addCategory(t.id));
+      head.appendChild(h2);
+      head.appendChild(addBtn);
+      panel.appendChild(head);
+
+      const cats = data[t.id];
+      if(cats.length === 0){
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = 'No categories yet. Click "Add Category" to start tracking.';
+        panel.appendChild(empty);
+      } else {
+        const grid = document.createElement('div');
+        grid.className = 'categories';
+        cats.forEach((cat, catIndex) => {
+          grid.appendChild(renderCategory(t.id, cat, catIndex));
+        });
+        panel.appendChild(grid);
+      }
+
+      panelsEl.appendChild(panel);
+    });
+  }
+
+  function renderCategory(tabId, cat, catIndex){
+    const card = document.createElement('div');
+    card.className = 'category';
+
+    const top = document.createElement('div');
+    top.className = 'category-top';
+    const h3 = document.createElement('h3');
+    h3.textContent = cat.name;
+    const del = document.createElement('button');
+    del.className = 'icon-btn';
+    del.textContent = '✕';
+    del.title = 'Delete category';
+    del.addEventListener('click', () => {
+      data[tabId].splice(catIndex, 1);
+      saveData();
+      render();
+    });
+    top.appendChild(h3);
+    top.appendChild(del);
+    card.appendChild(top);
+
+    const ul = document.createElement('ul');
+    ul.className = 'items';
+    cat.items.forEach((item, itemIndex) => {
+      const li = document.createElement('li');
+      if(item.done) li.classList.add('done');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = item.done;
+      cb.addEventListener('change', () => {
+        item.done = cb.checked;
+        saveData();
+        render();
+      });
+      const span = document.createElement('span');
+      span.textContent = item.text;
+      const rm = document.createElement('button');
+      rm.className = 'icon-btn';
+      rm.textContent = '✕';
+      rm.style.marginLeft = 'auto';
+      rm.addEventListener('click', () => {
+        cat.items.splice(itemIndex, 1);
+        saveData();
+        render();
+      });
+      li.appendChild(cb);
+      li.appendChild(span);
+      li.appendChild(rm);
+      ul.appendChild(li);
+    });
+    card.appendChild(ul);
+
+    const form = document.createElement('div');
+    form.className = 'item-form';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Add item...';
+    const addItemBtn = document.createElement('button');
+    addItemBtn.textContent = 'Add';
+
+    function submitItem(){
+      const val = input.value.trim();
+      if(!val) return;
+      cat.items.push({ text: val, done: false });
+      input.value = '';
+      saveData();
+      render();
+    }
+
+    addItemBtn.addEventListener('click', submitItem);
+    input.addEventListener('keydown', e => { if(e.key === 'Enter') submitItem(); });
+
+    form.appendChild(input);
+    form.appendChild(addItemBtn);
+    card.appendChild(form);
+
+    return card;
+  }
+
+  function addCategory(tabId){
+    const name = prompt('Category name:');
+    if(!name || !name.trim()) return;
+    data[tabId].push({ name: name.trim(), items: [] });
+    saveData();
+    render();
+  }
+
+  render();
+</script>
+
+</body>
+</html>
