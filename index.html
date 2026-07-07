@@ -377,6 +377,98 @@
   }
   .modal-btn-danger:hover{ background:var(--clay-dark); }
 
+  .modal-btn-primary{
+    background:var(--teal);
+    color:#fff;
+  }
+  .modal-btn-primary:hover{ background:var(--teal-dark); }
+
+  .modal-input{
+    width:100%;
+    box-sizing:border-box;
+    border:1px solid var(--sand-dark);
+    border-radius:6px;
+    padding:0.55rem 0.7rem;
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:0.9rem;
+    color:var(--teal-dark);
+    background:#fff;
+    margin:0 0 1.2rem;
+  }
+
+  .search-modal-card{
+    max-width:440px;
+    max-height:80vh;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .search-modal-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:1rem;
+  }
+
+  .search-modal-head h3{
+    font-family:'Fraunces', serif;
+    font-size:1.2rem;
+    margin:0;
+    color:var(--ink);
+  }
+
+  .search-modal-results{
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:0.8rem;
+  }
+
+  .search-result-card{
+    background:var(--sand);
+    border:1px solid var(--sand-dark);
+    border-radius:10px;
+    padding:0.8rem 1rem;
+  }
+
+  .search-result-card h4{
+    font-family:'Fraunces', serif;
+    font-size:1rem;
+    margin:0 0 0.5rem;
+    color:var(--ink);
+  }
+
+  .search-result-card ul{
+    list-style:none;
+    margin:0;
+    padding:0;
+    display:flex;
+    flex-direction:column;
+    gap:0.3rem;
+  }
+
+  .search-result-card li{
+    display:flex;
+    justify-content:space-between;
+    font-size:0.88rem;
+    color:var(--ink);
+  }
+
+  .search-result-card .search-result-total{
+    border-top:1px solid var(--sand-dark);
+    margin-top:0.5rem;
+    padding-top:0.4rem;
+    font-weight:700;
+    display:flex;
+    justify-content:space-between;
+    font-size:0.88rem;
+  }
+
+  .search-result-none{
+    font-size:0.85rem;
+    color:#7C88B8;
+  }
+
   footer{
     text-align:center;
     color:#7C88B8;
@@ -461,6 +553,37 @@
   </div>
 </div>
 
+<div id="prompt-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-card">
+    <p id="prompt-modal-message"></p>
+    <input id="prompt-modal-input" type="text" class="modal-input">
+    <div class="modal-actions">
+      <button id="prompt-modal-cancel" class="modal-btn modal-btn-cancel">Cancel</button>
+      <button id="prompt-modal-confirm" class="modal-btn modal-btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="alert-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-card">
+    <p id="alert-modal-message"></p>
+    <div class="modal-actions">
+      <button id="alert-modal-ok" class="modal-btn modal-btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<div id="search-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-card search-modal-card">
+    <div class="search-modal-head">
+      <h3>Search Items</h3>
+      <button id="search-modal-close" class="icon-btn">✕</button>
+    </div>
+    <input id="search-modal-input" type="text" class="modal-input" placeholder="Type an item name...">
+    <div id="search-modal-results" class="search-modal-results"></div>
+  </div>
+</div>
+
 <div id="app-content" style="display:none;">
 
 <header class="banner">
@@ -523,6 +646,158 @@
 
       cancelBtn.addEventListener('click', onCancel);
       confirmBtn.addEventListener('click', onConfirm);
+    });
+  }
+
+  function showPromptModal(message, defaultValue){
+    return new Promise(resolve => {
+      const overlay = document.getElementById('prompt-modal');
+      const messageEl = document.getElementById('prompt-modal-message');
+      const input = document.getElementById('prompt-modal-input');
+      const cancelBtn = document.getElementById('prompt-modal-cancel');
+      const confirmBtn = document.getElementById('prompt-modal-confirm');
+
+      messageEl.textContent = message;
+      input.value = defaultValue || '';
+      overlay.style.display = 'flex';
+      setTimeout(() => { input.focus(); input.select(); }, 0);
+
+      function cleanup(result){
+        overlay.style.display = 'none';
+        cancelBtn.removeEventListener('click', onCancel);
+        confirmBtn.removeEventListener('click', onConfirm);
+        input.removeEventListener('keydown', onKeydown);
+        resolve(result);
+      }
+      function onCancel(){ cleanup(null); }
+      function onConfirm(){ cleanup(input.value); }
+      function onKeydown(e){
+        if(e.key === 'Enter') onConfirm();
+        if(e.key === 'Escape') onCancel();
+      }
+
+      cancelBtn.addEventListener('click', onCancel);
+      confirmBtn.addEventListener('click', onConfirm);
+      input.addEventListener('keydown', onKeydown);
+    });
+  }
+
+  function showAlertModal(message){
+    return new Promise(resolve => {
+      const overlay = document.getElementById('alert-modal');
+      const messageEl = document.getElementById('alert-modal-message');
+      const okBtn = document.getElementById('alert-modal-ok');
+
+      messageEl.textContent = message;
+      overlay.style.display = 'flex';
+
+      function cleanup(){
+        overlay.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+        resolve();
+      }
+      function onOk(){ cleanup(); }
+
+      okBtn.addEventListener('click', onOk);
+    });
+  }
+
+  function openSearchModal(){
+    const overlay = document.getElementById('search-modal');
+    const input = document.getElementById('search-modal-input');
+    const closeBtn = document.getElementById('search-modal-close');
+
+    overlay.style.display = 'flex';
+    input.value = '';
+    renderSearchResults('');
+    setTimeout(() => input.focus(), 0);
+
+    function onInput(){ renderSearchResults(input.value); }
+    function onClose(){
+      overlay.style.display = 'none';
+      input.removeEventListener('input', onInput);
+      closeBtn.removeEventListener('click', onClose);
+      overlay.removeEventListener('click', onOverlayClick);
+      document.removeEventListener('keydown', onKeydown);
+    }
+    function onOverlayClick(e){
+      if(e.target === overlay) onClose();
+    }
+    function onKeydown(e){
+      if(e.key === 'Escape') onClose();
+    }
+
+    input.addEventListener('input', onInput);
+    closeBtn.addEventListener('click', onClose);
+    overlay.addEventListener('click', onOverlayClick);
+    document.addEventListener('keydown', onKeydown);
+  }
+
+  function renderSearchResults(query){
+    const resultsEl = document.getElementById('search-modal-results');
+    resultsEl.innerHTML = '';
+
+    const trimmed = query.trim().toLowerCase();
+    const itemTotals = buildItemTotals();
+
+    let matchingNames;
+    if(trimmed === ''){
+      matchingNames = catalogItems.map(i => i.name);
+    }else{
+      matchingNames = catalogItems
+        .filter(i => i.name.toLowerCase().includes(trimmed))
+        .map(i => i.name);
+    }
+    matchingNames.sort((a, b) => a.localeCompare(b));
+
+    if(matchingNames.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'search-result-none';
+      empty.textContent = 'No items match that search.';
+      resultsEl.appendChild(empty);
+      return;
+    }
+
+    matchingNames.forEach(name => {
+      const entry = Object.values(itemTotals).find(e => e.name === name);
+      const card = document.createElement('div');
+      card.className = 'search-result-card';
+
+      const h4 = document.createElement('h4');
+      h4.textContent = name;
+      card.appendChild(h4);
+
+      if(!entry){
+        const none = document.createElement('div');
+        none.className = 'search-result-none';
+        none.textContent = 'Not tracked at any location yet.';
+        card.appendChild(none);
+      }else{
+        const ul = document.createElement('ul');
+        entry.byLocation.forEach(loc => {
+          const li = document.createElement('li');
+          const nameSpan = document.createElement('span');
+          nameSpan.textContent = loc.locationName;
+          const qtySpan = document.createElement('span');
+          qtySpan.textContent = loc.qty;
+          li.appendChild(nameSpan);
+          li.appendChild(qtySpan);
+          ul.appendChild(li);
+        });
+        card.appendChild(ul);
+
+        const totalRow = document.createElement('div');
+        totalRow.className = 'search-result-total';
+        const totalLabel = document.createElement('span');
+        totalLabel.textContent = 'Total';
+        const totalValue = document.createElement('span');
+        totalValue.textContent = entry.total;
+        totalRow.appendChild(totalLabel);
+        totalRow.appendChild(totalValue);
+        card.appendChild(totalRow);
+      }
+
+      resultsEl.appendChild(card);
     });
   }
 
@@ -702,6 +977,14 @@
     addTabBtn.addEventListener('click', addLocation);
     tabsEl.appendChild(addTabBtn);
 
+    const searchBtn = document.createElement('button');
+    searchBtn.textContent = '🔍 Search';
+    searchBtn.title = 'Search for an item';
+    searchBtn.style.marginLeft = 'auto';
+    searchBtn.style.color = 'var(--mint)';
+    searchBtn.addEventListener('click', openSearchModal);
+    tabsEl.appendChild(searchBtn);
+
     panelsEl.innerHTML = '';
     allTabs.forEach(t => {
       const panel = document.createElement('section');
@@ -718,23 +1001,23 @@
   }
 
   async function addLocation(){
-    const name = prompt('Name for the new tab:');
+    const name = await showPromptModal('Name for the new tab:', '');
     if(!name || !name.trim()) return;
     const nextPosition = locations.length > 0 ? Math.max(...locations.map(l => l.position)) + 1 : 0;
     const { error } = await sb.from('oasis_locations').insert({ name: name.trim(), position: nextPosition });
-    if(error) alert('Could not add tab: ' + error.message);
+    if(error) showAlertModal('Could not add tab: ' + error.message);
   }
 
   async function renameLocation(locationId, currentName){
-    const name = prompt('Rename tab:', currentName);
+    const name = await showPromptModal('Rename tab:', currentName);
     if(!name || !name.trim() || name.trim() === currentName) return;
     const { error } = await sb.from('oasis_locations').update({ name: name.trim() }).eq('id', locationId);
-    if(error) alert('Could not rename tab: ' + error.message);
+    if(error) showAlertModal('Could not rename tab: ' + error.message);
   }
 
   async function updateRentDue(locationId, rentDue){
     const { error } = await sb.from('oasis_locations').update({ rent_due: rentDue }).eq('id', locationId);
-    if(error) alert('Could not update rent due date: ' + error.message);
+    if(error) showAlertModal('Could not update rent due date: ' + error.message);
   }
 
   async function deleteLocation(locationId, locationLabel){
@@ -742,7 +1025,7 @@
     if(!confirmed) return;
     const { error } = await sb.from('oasis_locations').delete().eq('id', locationId);
     if(error){
-      alert('Could not delete tab: ' + error.message);
+      showAlertModal('Could not delete tab: ' + error.message);
       return;
     }
     if(activeTab === locationId){
@@ -817,17 +1100,9 @@
     return pill;
   }
 
-  function renderTotalsPanel(){
-    const wrap = document.createElement('div');
-
-    const head = document.createElement('div');
-    head.className = 'panel-head';
-    const h2 = document.createElement('h2');
-    h2.textContent = 'Totals';
-    head.appendChild(h2);
-    wrap.appendChild(head);
-
-    // Build: itemId -> { name, byLocation: [{locationName, qty}], total }
+  // Build: itemId -> { name, byLocation: [{locationName, qty}], total }
+  // Shared by the Totals tab and the search popup.
+  function buildItemTotals(){
     const itemTotals = {};
     locations.forEach(loc => {
       (locationItems[loc.id] || []).forEach(entry => {
@@ -841,6 +1116,20 @@
         itemTotals[id].total += qty;
       });
     });
+    return itemTotals;
+  }
+
+  function renderTotalsPanel(){
+    const wrap = document.createElement('div');
+
+    const head = document.createElement('div');
+    head.className = 'panel-head';
+    const h2 = document.createElement('h2');
+    h2.textContent = 'Totals';
+    head.appendChild(h2);
+    wrap.appendChild(head);
+
+    const itemTotals = buildItemTotals();
 
     const itemIds = Object.keys(itemTotals).sort((a, b) =>
       itemTotals[a].name.localeCompare(itemTotals[b].name)
@@ -1105,34 +1394,34 @@
   // ---------- Mutations: catalog ----------
 
   async function addCatalogItem(){
-    const name = prompt('Item name:');
+    const name = await showPromptModal('Item name:', '');
     if(!name || !name.trim()) return;
     const { error } = await sb.from('oasis_items').insert({ name: name.trim() });
-    if(error) alert('Could not add item: ' + error.message);
+    if(error) showAlertModal('Could not add item: ' + error.message);
   }
 
   async function deleteCatalogItem(itemId, itemName){
     const confirmed = await showConfirmModal(`Delete "${itemName}" from the catalog? This also removes it from any location tracking it.`);
     if(!confirmed) return;
     const { error } = await sb.from('oasis_items').delete().eq('id', itemId);
-    if(error) alert('Could not delete item: ' + error.message);
+    if(error) showAlertModal('Could not delete item: ' + error.message);
   }
 
   // ---------- Mutations: per-location tracking ----------
 
   async function addItemToLocation(locationId, itemId){
     const { error } = await sb.from('oasis_location_items').insert({ location_id: locationId, item_id: itemId });
-    if(error) alert('Could not add item to this location: ' + error.message);
+    if(error) showAlertModal('Could not add item to this location: ' + error.message);
   }
 
   async function updateLocationItemQuantity(rowId, quantity){
     const { error } = await sb.from('oasis_location_items').update({ quantity }).eq('id', rowId);
-    if(error) alert('Could not update quantity: ' + error.message);
+    if(error) showAlertModal('Could not update quantity: ' + error.message);
   }
 
   async function removeItemFromLocation(rowId){
     const { error } = await sb.from('oasis_location_items').delete().eq('id', rowId);
-    if(error) alert('Could not remove item: ' + error.message);
+    if(error) showAlertModal('Could not remove item: ' + error.message);
   }
 
   init();
