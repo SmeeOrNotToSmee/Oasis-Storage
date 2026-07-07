@@ -321,7 +321,7 @@
 
 <header class="banner">
   <h1>Oasis Tracker</h1>
-  <p class="tagline">Gang House &middot; Warehouse 1 &middot; Warehouse 2</p>
+  <p class="tagline">Items &middot; Gang House &middot; Warehouse 1 &middot; Warehouse 2</p>
   <div class="dune"></div>
 </header>
 
@@ -340,26 +340,25 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-  // ---- Fill these in from your Supabase project (Settings > API) ----
   const SUPABASE_URL = "https://gpaqlehknskrcthyaapo.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdwYXFsZWhrbnNrcmN0aHlhYXBvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NjQwMjEsImV4cCI6MjA5ODI0MDAyMX0.pVsGNoYVNsh6w0RTTCajtveVJ12wgxxgP1Vqhl2EOxQ";
-  // ----------------------------------------------------------------------
 
-  // Where Discord sends people to log in and check their Oasis role.
-  // This points at your "oasis-auth" Supabase Edge Function.
   const OASIS_AUTH_FUNCTION_URL = "https://gpaqlehknskrcthyaapo.supabase.co/functions/v1/oasis-auth";
   const DISCORD_CLIENT_ID = "1523834823976681503";
 
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  const TABS = [
+  const CATALOG_TAB_ID = 'items';
+  const LOCATION_TABS = [
     { id: 'gang-house', label: 'Gang House' },
     { id: 'warehouse-1', label: 'Warehouse 1' },
     { id: 'warehouse-2', label: 'Warehouse 2' }
   ];
+  const ALL_TABS = [{ id: CATALOG_TAB_ID, label: 'Items' }, ...LOCATION_TABS];
 
-  let categories = []; // [{id, tab, name, items:[{id,text,done}]}]
-  let activeTab = TABS[0].id;
+  let categories = [];      // [{id, name, items:[{id, name}]}]  -- master catalog
+  let locationItems = {};   // { locationId: [{id (location_item row id), item_id, done, item:{id,name,category_id}}] }
+  let activeTab = CATALOG_TAB_ID;
   let realtimeChannel = null;
 
   const loginScreen = document.getElementById('login-screen');
@@ -422,14 +421,12 @@
   }
 
   function handleAuthRedirect(){
-    // Coming back from Discord with a session token in the URL fragment
     if(window.location.hash.startsWith('#session=')){
       const token = decodeURIComponent(window.location.hash.slice('#session='.length));
       sessionStorage.setItem(SESSION_KEY, token);
       window.history.replaceState({}, document.title, window.location.pathname);
       return true;
     }
-    // Coming back with a denial or error
     const params = new URLSearchParams(window.location.search);
     if(params.has('auth')){
       const reason = params.get('auth');
@@ -454,35 +451,59 @@
     }
   }
 
-  async function loadData(){
+  // ---------- Data loading ----------
+
+  async function loadCatalog(){
     const { data: cats, error } = await sb
       .from('oasis_categories')
-      .select('id, tab, name, oasis_items(id, text, done, created_at)')
+      .select('id, name, oasis_items(id, name, created_at)')
       .order('created_at', { ascending: true });
     if(error){ console.error(error); return; }
     categories = (cats || []).map(c => ({
       ...c,
       items: (c.oasis_items || []).slice().sort((a,b) => new Date(a.created_at) - new Date(b.created_at))
     }));
+  }
+
+  async function loadLocationItems(){
+    const { data: rows, error } = await sb
+      .from('oasis_location_items')
+      .select('id, location, item_id, done, oasis_items(id, name, category_id, oasis_categories(id, name))')
+      .order('created_at', { ascending: true });
+    if(error){ console.error(error); return; }
+    locationItems = {};
+    LOCATION_TABS.forEach(t => locationItems[t.id] = []);
+    (rows || []).forEach(row => {
+      if(!locationItems[row.location]) locationItems[row.location] = [];
+      locationItems[row.location].push({
+        id: row.id,
+        item_id: row.item_id,
+        done: row.done,
+        item: row.oasis_items
+      });
+    });
+  }
+
+  async function loadAll(){
+    await Promise.all([loadCatalog(), loadLocationItems()]);
     render();
   }
 
   function subscribeAndLoad(){
-    loadData();
+    loadAll();
     if(realtimeChannel) return;
     realtimeChannel = sb.channel('oasis-tracker-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_categories' }, loadData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_items' }, loadData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_categories' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_items' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_location_items' }, loadAll)
       .subscribe();
   }
 
-  function categoriesForTab(tabId){
-    return categories.filter(c => c.tab === tabId);
-  }
+  // ---------- Rendering ----------
 
   function render(){
     tabsEl.innerHTML = '';
-    TABS.forEach(t => {
+    ALL_TABS.forEach(t => {
       const btn = document.createElement('button');
       btn.textContent = t.label;
       if(t.id === activeTab) btn.classList.add('active');
@@ -491,40 +512,49 @@
     });
 
     panelsEl.innerHTML = '';
-    TABS.forEach(t => {
+    ALL_TABS.forEach(t => {
       const panel = document.createElement('section');
       panel.className = 'panel' + (t.id === activeTab ? ' active' : '');
-
-      const head = document.createElement('div');
-      head.className = 'panel-head';
-      const h2 = document.createElement('h2');
-      h2.textContent = t.label;
-      const addBtn = document.createElement('button');
-      addBtn.className = 'add-btn';
-      addBtn.textContent = '+ Add Category';
-      addBtn.addEventListener('click', () => addCategory(t.id));
-      head.appendChild(h2);
-      head.appendChild(addBtn);
-      panel.appendChild(head);
-
-      const cats = categoriesForTab(t.id);
-      if(cats.length === 0){
-        const empty = document.createElement('div');
-        empty.className = 'empty-state';
-        empty.textContent = 'No categories yet. Click "Add Category" to start tracking.';
-        panel.appendChild(empty);
-      } else {
-        const grid = document.createElement('div');
-        grid.className = 'categories';
-        cats.forEach(cat => grid.appendChild(renderCategory(cat)));
-        panel.appendChild(grid);
+      if(t.id === CATALOG_TAB_ID){
+        panel.appendChild(renderCatalogPanel());
+      }else{
+        panel.appendChild(renderLocationPanel(t));
       }
-
       panelsEl.appendChild(panel);
     });
   }
 
-  function renderCategory(cat){
+  function renderCatalogPanel(){
+    const wrap = document.createElement('div');
+
+    const head = document.createElement('div');
+    head.className = 'panel-head';
+    const h2 = document.createElement('h2');
+    h2.textContent = 'Items';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-btn';
+    addBtn.textContent = '+ Add Category';
+    addBtn.addEventListener('click', addCategory);
+    head.appendChild(h2);
+    head.appendChild(addBtn);
+    wrap.appendChild(head);
+
+    if(categories.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No categories yet. Click "Add Category" to start building your item list.';
+      wrap.appendChild(empty);
+      return wrap;
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'categories';
+    categories.forEach(cat => grid.appendChild(renderCatalogCategory(cat)));
+    wrap.appendChild(grid);
+    return wrap;
+  }
+
+  function renderCatalogCategory(cat){
     const card = document.createElement('div');
     card.className = 'category';
 
@@ -535,7 +565,7 @@
     const del = document.createElement('button');
     del.className = 'icon-btn';
     del.textContent = '✕';
-    del.title = 'Delete category';
+    del.title = 'Delete category (and its items)';
     del.addEventListener('click', () => deleteCategory(cat.id));
     top.appendChild(h3);
     top.appendChild(del);
@@ -545,19 +575,14 @@
     ul.className = 'items';
     cat.items.forEach(item => {
       const li = document.createElement('li');
-      if(item.done) li.classList.add('done');
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = item.done;
-      cb.addEventListener('change', () => toggleItem(item.id, cb.checked));
       const span = document.createElement('span');
-      span.textContent = item.text;
+      span.textContent = item.name;
       const rm = document.createElement('button');
       rm.className = 'icon-btn';
       rm.textContent = '✕';
       rm.style.marginLeft = 'auto';
-      rm.addEventListener('click', () => deleteItem(item.id));
-      li.appendChild(cb);
+      rm.title = 'Delete item from catalog';
+      rm.addEventListener('click', () => deleteCatalogItem(item.id));
       li.appendChild(span);
       li.appendChild(rm);
       ul.appendChild(li);
@@ -575,7 +600,7 @@
     function submitItem(){
       const val = input.value.trim();
       if(!val) return;
-      addItem(cat.id, val);
+      addCatalogItem(cat.id, val);
       input.value = '';
     }
 
@@ -589,31 +614,179 @@
     return card;
   }
 
-  async function addCategory(tabId){
+  function renderLocationPanel(tab){
+    const wrap = document.createElement('div');
+
+    const head = document.createElement('div');
+    head.className = 'panel-head';
+    const h2 = document.createElement('h2');
+    h2.textContent = tab.label;
+    head.appendChild(h2);
+    wrap.appendChild(head);
+
+    // "Add item to this location" control
+    const addRow = document.createElement('div');
+    addRow.style.display = 'flex';
+    addRow.style.gap = '0.5rem';
+    addRow.style.marginBottom = '1.2rem';
+    addRow.style.flexWrap = 'wrap';
+
+    const select = document.createElement('select');
+    select.style.flex = '1';
+    select.style.minWidth = '200px';
+    select.style.padding = '0.5rem';
+    select.style.borderRadius = '6px';
+    select.style.border = '1px solid var(--sand-dark)';
+    select.style.background = '#fff';
+    select.style.fontFamily = "'IBM Plex Sans', sans-serif";
+
+    const existingItemIds = new Set((locationItems[tab.id] || []).map(li => li.item_id));
+    let hasOptions = false;
+    categories.forEach(cat => {
+      const available = cat.items.filter(i => !existingItemIds.has(i.id));
+      if(available.length === 0) return;
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = cat.name;
+      available.forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i.id;
+        opt.textContent = i.name;
+        optgroup.appendChild(opt);
+      });
+      select.appendChild(optgroup);
+      hasOptions = true;
+    });
+
+    if(!hasOptions){
+      const opt = document.createElement('option');
+      opt.textContent = categories.length === 0
+        ? 'Add items in the Items tab first'
+        : 'All catalog items already added here';
+      opt.disabled = true;
+      select.appendChild(opt);
+      select.disabled = true;
+    }
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-btn';
+    addBtn.textContent = '+ Add to ' + tab.label;
+    addBtn.disabled = !hasOptions;
+    addBtn.addEventListener('click', () => {
+      const itemId = select.value;
+      if(!itemId) return;
+      addItemToLocation(tab.id, itemId);
+    });
+
+    addRow.appendChild(select);
+    addRow.appendChild(addBtn);
+    wrap.appendChild(addRow);
+
+    const items = locationItems[tab.id] || [];
+    if(items.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'No items tracked here yet. Add some from the list above.';
+      wrap.appendChild(empty);
+      return wrap;
+    }
+
+    // Group this location's items by their catalog category
+    const byCategory = {};
+    items.forEach(li => {
+      const catName = (li.item && li.item.oasis_categories && li.item.oasis_categories.name) || 'Uncategorized';
+      if(!byCategory[catName]) byCategory[catName] = [];
+      byCategory[catName].push(li);
+    });
+
+    const grid = document.createElement('div');
+    grid.className = 'categories';
+    Object.keys(byCategory).forEach(catName => {
+      grid.appendChild(renderLocationCategoryCard(catName, byCategory[catName]));
+    });
+    wrap.appendChild(grid);
+
+    return wrap;
+  }
+
+  function renderLocationCategoryCard(catName, entries){
+    const card = document.createElement('div');
+    card.className = 'category';
+
+    const top = document.createElement('div');
+    top.className = 'category-top';
+    const h3 = document.createElement('h3');
+    h3.textContent = catName;
+    top.appendChild(h3);
+    card.appendChild(top);
+
+    const ul = document.createElement('ul');
+    ul.className = 'items';
+    entries.forEach(entry => {
+      const li = document.createElement('li');
+      if(entry.done) li.classList.add('done');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = entry.done;
+      cb.addEventListener('change', () => toggleLocationItem(entry.id, cb.checked));
+      const span = document.createElement('span');
+      span.textContent = entry.item ? entry.item.name : '(deleted item)';
+      const rm = document.createElement('button');
+      rm.className = 'icon-btn';
+      rm.textContent = '✕';
+      rm.style.marginLeft = 'auto';
+      rm.title = 'Remove from this location';
+      rm.addEventListener('click', () => removeItemFromLocation(entry.id));
+      li.appendChild(cb);
+      li.appendChild(span);
+      li.appendChild(rm);
+      ul.appendChild(li);
+    });
+    card.appendChild(ul);
+
+    return card;
+  }
+
+  // ---------- Mutations: catalog ----------
+
+  async function addCategory(){
     const name = prompt('Category name:');
     if(!name || !name.trim()) return;
-    const { error } = await sb.from('oasis_categories').insert({ tab: tabId, name: name.trim() });
+    const { error } = await sb.from('oasis_categories').insert({ name: name.trim() });
     if(error) alert('Could not add category: ' + error.message);
   }
 
   async function deleteCategory(categoryId){
+    if(!confirm('Delete this category and all its items? This also removes them from any location that has them.')) return;
     const { error } = await sb.from('oasis_categories').delete().eq('id', categoryId);
     if(error) alert('Could not delete category: ' + error.message);
   }
 
-  async function addItem(categoryId, text){
-    const { error } = await sb.from('oasis_items').insert({ category_id: categoryId, text });
+  async function addCatalogItem(categoryId, name){
+    const { error } = await sb.from('oasis_items').insert({ category_id: categoryId, name });
     if(error) alert('Could not add item: ' + error.message);
   }
 
-  async function toggleItem(itemId, done){
-    const { error } = await sb.from('oasis_items').update({ done }).eq('id', itemId);
+  async function deleteCatalogItem(itemId){
+    if(!confirm('Delete this item from the catalog? This also removes it from any location tracking it.')) return;
+    const { error } = await sb.from('oasis_items').delete().eq('id', itemId);
+    if(error) alert('Could not delete item: ' + error.message);
+  }
+
+  // ---------- Mutations: per-location tracking ----------
+
+  async function addItemToLocation(locationId, itemId){
+    const { error } = await sb.from('oasis_location_items').insert({ location: locationId, item_id: itemId });
+    if(error) alert('Could not add item to this location: ' + error.message);
+  }
+
+  async function toggleLocationItem(rowId, done){
+    const { error } = await sb.from('oasis_location_items').update({ done }).eq('id', rowId);
     if(error) alert('Could not update item: ' + error.message);
   }
 
-  async function deleteItem(itemId){
-    const { error } = await sb.from('oasis_items').delete().eq('id', itemId);
-    if(error) alert('Could not delete item: ' + error.message);
+  async function removeItemFromLocation(rowId){
+    const { error } = await sb.from('oasis_location_items').delete().eq('id', rowId);
+    if(error) alert('Could not remove item: ' + error.message);
   }
 
   init();
