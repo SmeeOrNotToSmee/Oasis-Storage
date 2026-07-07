@@ -265,8 +265,20 @@
     white-space:nowrap;
   }
 
-  .item-pill input[type="checkbox"]{
-    accent-color:var(--teal);
+  .item-pill .qty-input{
+    width:3.2rem;
+    text-align:center;
+    border:1px solid var(--sand-dark);
+    border-radius:999px;
+    padding:0.25rem 0.3rem;
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:0.85rem;
+    color:var(--ink);
+    background:#fff;
+  }
+  .item-pill .qty-input::-webkit-inner-spin-button,
+  .item-pill .qty-input::-webkit-outer-spin-button{
+    opacity:1;
   }
 
   .modal-overlay{
@@ -585,7 +597,7 @@
   async function loadLocationItems(){
     const { data: rows, error } = await sb
       .from('oasis_location_items')
-      .select('id, location_id, item_id, done, oasis_items(id, name)')
+      .select('id, location_id, item_id, quantity, oasis_items(id, name)')
       .order('created_at', { ascending: true });
     if(error){ console.error(error); return; }
     locationItems = {};
@@ -595,7 +607,7 @@
       locationItems[row.location_id].push({
         id: row.id,
         item_id: row.item_id,
-        done: row.done,
+        quantity: row.quantity,
         item: row.oasis_items
       });
     });
@@ -821,15 +833,22 @@
     const pill = document.createElement('div');
     pill.className = 'item-pill';
 
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = entry.done;
-    cb.addEventListener('change', () => toggleLocationItem(entry.id, cb.checked));
-    pill.appendChild(cb);
-
     const span = document.createElement('span');
     span.textContent = entry.item ? entry.item.name : '(deleted item)';
     pill.appendChild(span);
+
+    const qty = document.createElement('input');
+    qty.type = 'number';
+    qty.className = 'qty-input';
+    qty.min = '0';
+    qty.value = entry.quantity ?? 0;
+    qty.addEventListener('change', () => {
+      let val = parseInt(qty.value, 10);
+      if(isNaN(val) || val < 0) val = 0;
+      qty.value = val;
+      updateLocationItemQuantity(entry.id, val);
+    });
+    pill.appendChild(qty);
 
     const rm = document.createElement('button');
     rm.className = 'icon-btn';
@@ -864,9 +883,9 @@
     if(error) alert('Could not add item to this location: ' + error.message);
   }
 
-  async function toggleLocationItem(rowId, done){
-    const { error } = await sb.from('oasis_location_items').update({ done }).eq('id', rowId);
-    if(error) alert('Could not update item: ' + error.message);
+  async function updateLocationItemQuantity(rowId, quantity){
+    const { error } = await sb.from('oasis_location_items').update({ quantity }).eq('id', rowId);
+    if(error) alert('Could not update quantity: ' + error.message);
   }
 
   async function removeItemFromLocation(rowId){
