@@ -29,7 +29,6 @@
     min-height:100vh;
   }
 
-  /* Banner */
   header.banner{
     position:relative;
     background:linear-gradient(180deg, var(--teal) 0%, var(--teal-dark) 100%);
@@ -59,7 +58,6 @@
     z-index:2;
   }
 
-  /* Oasis dune divider - signature element */
   .dune{
     position:absolute;
     bottom:-1px; left:0; right:0;
@@ -77,7 +75,6 @@
     padding:0 1.5rem 4rem;
   }
 
-  /* Tabs */
   nav.tabs{
     display:flex;
     gap:0.5rem;
@@ -107,7 +104,6 @@
     border-bottom:3px solid var(--clay);
   }
 
-  /* Panels */
   section.panel{
     display:none;
     padding-top:1.8rem;
@@ -148,7 +144,6 @@
   button.add-btn:hover{ background:var(--clay-dark); }
   button.add-btn:active{ transform:scale(0.97); }
 
-  /* Category cards */
   .categories{
     display:grid;
     grid-template-columns:repeat(auto-fill, minmax(240px, 1fr));
@@ -254,9 +249,75 @@
     font-size:0.8rem;
     padding:1.5rem;
   }
+
+  .login-screen{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:linear-gradient(180deg, var(--teal) 0%, var(--teal-dark) 100%);
+    padding:1.5rem;
+  }
+
+  .login-card{
+    background:var(--card);
+    border-radius:12px;
+    padding:2.4rem 2.2rem;
+    max-width:360px;
+    width:100%;
+    text-align:center;
+    box-shadow:0 12px 30px rgba(0,0,0,0.25);
+  }
+
+  .login-card h1{
+    font-family:'Fraunces', serif;
+    font-size:1.8rem;
+    margin:0 0 0.6rem;
+    color:var(--ink);
+  }
+
+  .login-card p{
+    color:#5C5340;
+    font-size:0.95rem;
+    margin:0 0 1.4rem;
+  }
+
+  .discord-btn{
+    background:#5865F2;
+    color:#fff;
+    border:none;
+    font-family:'IBM Plex Sans', sans-serif;
+    font-weight:600;
+    font-size:0.95rem;
+    padding:0.75rem 1.4rem;
+    border-radius:8px;
+    cursor:pointer;
+    width:100%;
+    transition:background 0.2s ease;
+  }
+  .discord-btn:hover{ background:#4752C4; }
+  .discord-btn:disabled{ opacity:0.6; cursor:default; }
+
+  .login-error{
+    color:var(--clay-dark);
+    font-size:0.85rem;
+    margin:1rem 0 0 !important;
+    min-height:1.2em;
+  }
 </style>
 </head>
 <body>
+
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <h1>Oasis Tracker</h1>
+    <p>Log in with Discord to view and edit the tracker.</p>
+    <button id="discord-login-btn" class="discord-btn">Log in with Discord</button>
+    <p id="login-error" class="login-error"></p>
+  </div>
+</div>
+
+<div id="app-content" style="display:none;">
 
 <header class="banner">
   <h1>Oasis Tracker</h1>
@@ -269,38 +330,155 @@
   <div id="panels"></div>
 </main>
 
-<footer>Oasis Tracker &mdash; data is saved in this browser</footer>
+<footer>
+  Oasis Tracker &mdash; shared live for everyone with the required Discord role
+  <br>
+  <button id="logout-btn" class="icon-btn" style="text-decoration:underline; margin-top:0.4rem;">Log out</button>
+</footer>
 
+</div><!-- /#app-content -->
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
+  // ---- Fill these in from your Supabase project (Settings > API) ----
+  const SUPABASE_URL = "https://gpaqlehknskrcthyaapo.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdwYXFsZWhrbnNrcmN0aHlhYXBvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NjQwMjEsImV4cCI6MjA5ODI0MDAyMX0.pVsGNoYVNsh6w0RTTCajtveVJ12wgxxgP1Vqhl2EOxQ";
+  // ----------------------------------------------------------------------
+
+  // Where Discord sends people to log in and check their Oasis role.
+  // This points at your "oasis-auth" Supabase Edge Function.
+  const OASIS_AUTH_FUNCTION_URL = "https://gpaqlehknskrcthyaapo.supabase.co/functions/v1/oasis-auth";
+  const DISCORD_CLIENT_ID = "1523834823976681503";
+
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
   const TABS = [
     { id: 'gang-house', label: 'Gang House' },
     { id: 'warehouse-1', label: 'Warehouse 1' },
     { id: 'warehouse-2', label: 'Warehouse 2' }
   ];
 
-  const STORAGE_KEY = 'oasis-tracker-data';
-
-  function loadData(){
-    try{
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if(raw) return JSON.parse(raw);
-    }catch(e){}
-    const fresh = {};
-    TABS.forEach(t => fresh[t.id] = []);
-    return fresh;
-  }
-
-  function saveData(){
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }
-
-  let data = loadData();
-  TABS.forEach(t => { if(!data[t.id]) data[t.id] = []; });
-
+  let categories = []; // [{id, tab, name, items:[{id,text,done}]}]
   let activeTab = TABS[0].id;
+  let realtimeChannel = null;
 
+  const loginScreen = document.getElementById('login-screen');
+  const appContent = document.getElementById('app-content');
+  const loginBtn = document.getElementById('discord-login-btn');
+  const loginError = document.getElementById('login-error');
   const tabsEl = document.getElementById('tabs');
   const panelsEl = document.getElementById('panels');
+
+  const SESSION_KEY = 'oasis_session';
+
+  loginBtn.addEventListener('click', () => {
+    const authorizeUrl = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(DISCORD_CLIENT_ID)}&redirect_uri=${encodeURIComponent(OASIS_AUTH_FUNCTION_URL)}&response_type=code&scope=identify%20guilds.members.read`;
+    window.location.href = authorizeUrl;
+  });
+
+  document.getElementById('logout-btn').addEventListener('click', () => {
+    sessionStorage.removeItem(SESSION_KEY);
+    showLoginScreen();
+  });
+
+  function decodeSessionPayload(token){
+    try{
+      const [payloadB64] = token.split('.');
+      const padded = payloadB64.replace(/-/g, '+').replace(/_/g, '/');
+      const json = atob(padded);
+      return JSON.parse(json);
+    }catch(e){
+      return null;
+    }
+  }
+
+  function getValidSession(){
+    const token = sessionStorage.getItem(SESSION_KEY);
+    if(!token) return null;
+    const payload = decodeSessionPayload(token);
+    if(!payload || !payload.exp || payload.exp < Date.now()){
+      sessionStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return payload;
+  }
+
+  function showLoginScreen(message){
+    loginScreen.style.display = 'flex';
+    appContent.style.display = 'none';
+    loginBtn.disabled = false;
+    loginBtn.textContent = 'Log in with Discord';
+    loginError.textContent = message || '';
+    if(realtimeChannel){
+      sb.removeChannel(realtimeChannel);
+      realtimeChannel = null;
+    }
+  }
+
+  function enterApp(){
+    loginScreen.style.display = 'none';
+    appContent.style.display = '';
+    subscribeAndLoad();
+  }
+
+  function handleAuthRedirect(){
+    // Coming back from Discord with a session token in the URL fragment
+    if(window.location.hash.startsWith('#session=')){
+      const token = decodeURIComponent(window.location.hash.slice('#session='.length));
+      sessionStorage.setItem(SESSION_KEY, token);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return true;
+    }
+    // Coming back with a denial or error
+    const params = new URLSearchParams(window.location.search);
+    if(params.has('auth')){
+      const reason = params.get('auth');
+      window.history.replaceState({}, document.title, window.location.pathname);
+      if(reason === 'denied'){
+        showLoginScreen("You don't have the required Discord role.");
+      }else{
+        showLoginScreen('Something went wrong logging in. Please try again.');
+      }
+      return false;
+    }
+    return null;
+  }
+
+  function init(){
+    const redirectResult = handleAuthRedirect();
+    const session = getValidSession();
+    if(session){
+      enterApp();
+    }else if(redirectResult === null){
+      showLoginScreen();
+    }
+  }
+
+  async function loadData(){
+    const { data: cats, error } = await sb
+      .from('oasis_categories')
+      .select('id, tab, name, oasis_items(id, text, done, created_at)')
+      .order('created_at', { ascending: true });
+    if(error){ console.error(error); return; }
+    categories = (cats || []).map(c => ({
+      ...c,
+      items: (c.oasis_items || []).slice().sort((a,b) => new Date(a.created_at) - new Date(b.created_at))
+    }));
+    render();
+  }
+
+  function subscribeAndLoad(){
+    loadData();
+    if(realtimeChannel) return;
+    realtimeChannel = sb.channel('oasis-tracker-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_categories' }, loadData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_items' }, loadData)
+      .subscribe();
+  }
+
+  function categoriesForTab(tabId){
+    return categories.filter(c => c.tab === tabId);
+  }
 
   function render(){
     tabsEl.innerHTML = '';
@@ -329,7 +507,7 @@
       head.appendChild(addBtn);
       panel.appendChild(head);
 
-      const cats = data[t.id];
+      const cats = categoriesForTab(t.id);
       if(cats.length === 0){
         const empty = document.createElement('div');
         empty.className = 'empty-state';
@@ -338,9 +516,7 @@
       } else {
         const grid = document.createElement('div');
         grid.className = 'categories';
-        cats.forEach((cat, catIndex) => {
-          grid.appendChild(renderCategory(t.id, cat, catIndex));
-        });
+        cats.forEach(cat => grid.appendChild(renderCategory(cat)));
         panel.appendChild(grid);
       }
 
@@ -348,7 +524,7 @@
     });
   }
 
-  function renderCategory(tabId, cat, catIndex){
+  function renderCategory(cat){
     const card = document.createElement('div');
     card.className = 'category';
 
@@ -360,39 +536,27 @@
     del.className = 'icon-btn';
     del.textContent = '✕';
     del.title = 'Delete category';
-    del.addEventListener('click', () => {
-      data[tabId].splice(catIndex, 1);
-      saveData();
-      render();
-    });
+    del.addEventListener('click', () => deleteCategory(cat.id));
     top.appendChild(h3);
     top.appendChild(del);
     card.appendChild(top);
 
     const ul = document.createElement('ul');
     ul.className = 'items';
-    cat.items.forEach((item, itemIndex) => {
+    cat.items.forEach(item => {
       const li = document.createElement('li');
       if(item.done) li.classList.add('done');
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.checked = item.done;
-      cb.addEventListener('change', () => {
-        item.done = cb.checked;
-        saveData();
-        render();
-      });
+      cb.addEventListener('change', () => toggleItem(item.id, cb.checked));
       const span = document.createElement('span');
       span.textContent = item.text;
       const rm = document.createElement('button');
       rm.className = 'icon-btn';
       rm.textContent = '✕';
       rm.style.marginLeft = 'auto';
-      rm.addEventListener('click', () => {
-        cat.items.splice(itemIndex, 1);
-        saveData();
-        render();
-      });
+      rm.addEventListener('click', () => deleteItem(item.id));
       li.appendChild(cb);
       li.appendChild(span);
       li.appendChild(rm);
@@ -411,10 +575,8 @@
     function submitItem(){
       const val = input.value.trim();
       if(!val) return;
-      cat.items.push({ text: val, done: false });
+      addItem(cat.id, val);
       input.value = '';
-      saveData();
-      render();
     }
 
     addItemBtn.addEventListener('click', submitItem);
@@ -427,15 +589,34 @@
     return card;
   }
 
-  function addCategory(tabId){
+  async function addCategory(tabId){
     const name = prompt('Category name:');
     if(!name || !name.trim()) return;
-    data[tabId].push({ name: name.trim(), items: [] });
-    saveData();
-    render();
+    const { error } = await sb.from('oasis_categories').insert({ tab: tabId, name: name.trim() });
+    if(error) alert('Could not add category: ' + error.message);
   }
 
-  render();
+  async function deleteCategory(categoryId){
+    const { error } = await sb.from('oasis_categories').delete().eq('id', categoryId);
+    if(error) alert('Could not delete category: ' + error.message);
+  }
+
+  async function addItem(categoryId, text){
+    const { error } = await sb.from('oasis_items').insert({ category_id: categoryId, text });
+    if(error) alert('Could not add item: ' + error.message);
+  }
+
+  async function toggleItem(itemId, done){
+    const { error } = await sb.from('oasis_items').update({ done }).eq('id', itemId);
+    if(error) alert('Could not update item: ' + error.message);
+  }
+
+  async function deleteItem(itemId){
+    const { error } = await sb.from('oasis_items').delete().eq('id', itemId);
+    if(error) alert('Could not delete item: ' + error.message);
+  }
+
+  init();
 </script>
 
 </body>
