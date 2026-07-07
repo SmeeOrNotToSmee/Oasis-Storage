@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Oasis Items Trackers</title>
+<title>Oasis Items Tracker</title>
 <link rel="icon" type="image/png" href="https://i.postimg.cc/rmG38G4L/Oasisnobg.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -444,7 +444,7 @@
 
 <div id="login-screen" class="login-screen">
   <div class="login-card">
-    <h1>Oasis Items Trackers</h1>
+    <h1>Oasis Items Tracker</h1>
     <p>Log in with Discord to view and edit the tracker.</p>
     <button id="discord-login-btn" class="discord-btn">Log in with Discord</button>
     <p id="login-error" class="login-error"></p>
@@ -465,7 +465,7 @@
 
 <header class="banner">
   <img src="https://i.postimg.cc/rmG38G4L/Oasisnobg.png" alt="Oasis Tracker logo" class="banner-logo">
-  <h1>Oasis Items Trackers</h1>
+  <h1>Oasis Items Tracker</h1>
   <div class="dune"></div>
 </header>
 
@@ -737,6 +737,19 @@
     if(error) alert('Could not update rent due date: ' + error.message);
   }
 
+  async function deleteLocation(locationId, locationLabel){
+    const confirmed = await showConfirmModal(`Delete the "${locationLabel}" tab? This also removes all items and rent info tracked there.`);
+    if(!confirmed) return;
+    const { error } = await sb.from('oasis_locations').delete().eq('id', locationId);
+    if(error){
+      alert('Could not delete tab: ' + error.message);
+      return;
+    }
+    if(activeTab === locationId){
+      activeTab = CATALOG_TAB_ID;
+    }
+  }
+
   function renderCatalogPanel(){
     const wrap = document.createElement('div');
 
@@ -917,7 +930,14 @@
     head.className = 'panel-head';
     const h2 = document.createElement('h2');
     h2.textContent = tab.label;
+    const deleteTabBtn = document.createElement('button');
+    deleteTabBtn.className = 'add-btn';
+    deleteTabBtn.style.background = 'var(--sand-dark)';
+    deleteTabBtn.style.color = 'var(--ink)';
+    deleteTabBtn.textContent = 'Delete Tab';
+    deleteTabBtn.addEventListener('click', () => deleteLocation(tab.id, tab.label));
     head.appendChild(h2);
+    head.appendChild(deleteTabBtn);
     wrap.appendChild(head);
 
     // Rent Due date for this location
