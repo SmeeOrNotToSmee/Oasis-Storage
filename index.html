@@ -4,19 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Oasis Tracker</title>
+<link rel="icon" type="image/png" href="https://i.postimg.cc/rmG38G4L/Oasisnobg.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --sand: #EAE0C8;
-    --sand-dark: #CBB98F;
-    --clay: #B8693F;
-    --clay-dark: #954F2D;
-    --ink: #2A241A;
-    --teal: #1F6F6B;
-    --teal-dark: #164F4C;
-    --mint: #DCEAE0;
-    --card: #F5EFDE;
+    --sand: #0A0E27;
+    --sand-dark: #2E3768;
+    --clay: #FF7A45;
+    --clay-dark: #E0602A;
+    --ink: #EAF0FF;
+    --teal: #3FA9F5;
+    --teal-dark: #1E6FA8;
+    --mint: #BFE3FF;
+    --card: #141A3D;
   }
 
   *{ box-sizing:border-box; }
@@ -31,11 +32,22 @@
 
   header.banner{
     position:relative;
-    background:linear-gradient(180deg, var(--teal) 0%, var(--teal-dark) 100%);
+    background:linear-gradient(180deg, #2a2166 0%, #1a1f4d 55%, var(--sand) 100%);
     color:var(--mint);
     padding:2.6rem 1.5rem 3.4rem;
     text-align:center;
     overflow:hidden;
+  }
+
+  header.banner .banner-logo{
+    width:110px;
+    height:110px;
+    object-fit:contain;
+    display:block;
+    margin:0 auto 0.8rem;
+    position:relative;
+    z-index:2;
+    filter:drop-shadow(0 0 18px rgba(63,169,245,0.45));
   }
 
   header.banner h1{
@@ -53,7 +65,7 @@
     font-size:0.95rem;
     letter-spacing:0.16em;
     text-transform:uppercase;
-    color:#B9D9CD;
+    color:var(--mint);
     position:relative;
     z-index:2;
   }
@@ -90,7 +102,7 @@
     background:none;
     border:none;
     padding:0.85rem 1.1rem;
-    color:#7A6E52;
+    color:#8CA0D9;
     cursor:pointer;
     position:relative;
     top:2px;
@@ -175,7 +187,7 @@
     background:none;
     border:none;
     cursor:pointer;
-    color:#9A8C6A;
+    color:#8C9BD9;
     font-size:1rem;
     line-height:1;
     padding:0.15rem 0.3rem;
@@ -196,7 +208,7 @@
     align-items:center;
     gap:0.5rem;
     font-size:0.9rem;
-    color:#4A4331;
+    color:var(--ink);
   }
 
   .items li input[type="checkbox"]{
@@ -205,7 +217,7 @@
 
   .items li.done span{
     text-decoration:line-through;
-    color:#9A8C6A;
+    color:#6A78A8;
   }
 
   .item-form{
@@ -235,7 +247,7 @@
   .item-form button:hover{ background:var(--teal-dark); }
 
   .empty-state{
-    color:#8A7C5E;
+    color:#7C88B8;
     font-size:0.9rem;
     padding:1.2rem 0;
     text-align:center;
@@ -291,25 +303,28 @@
   .qty-btn:active{ transform:scale(0.94); }
 
   .item-pill .qty-input{
-    width:2.6rem;
+    width:3.4rem;
     text-align:center;
     border:1px solid var(--sand-dark);
     border-radius:999px;
-    padding:0.25rem 0.2rem;
+    padding:0.25rem 0.3rem;
     font-family:'IBM Plex Sans', sans-serif;
     font-size:0.85rem;
     color:var(--ink);
     background:#fff;
+    -moz-appearance:textfield;
+    appearance:textfield;
   }
   .item-pill .qty-input::-webkit-inner-spin-button,
   .item-pill .qty-input::-webkit-outer-spin-button{
-    opacity:1;
+    -webkit-appearance:none;
+    margin:0;
   }
 
   .modal-overlay{
     position:fixed;
     inset:0;
-    background:rgba(42,36,26,0.55);
+    background:rgba(5,7,20,0.7);
     display:flex;
     align-items:center;
     justify-content:center;
@@ -353,7 +368,7 @@
     background:var(--sand-dark);
     color:var(--ink);
   }
-  .modal-btn-cancel:hover{ background:#BBA87A; }
+  .modal-btn-cancel:hover{ background:#3B4570; }
 
   .modal-btn-danger{
     background:var(--clay);
@@ -363,7 +378,7 @@
 
   footer{
     text-align:center;
-    color:#8A7C5E;
+    color:#7C88B8;
     font-size:0.8rem;
     padding:1.5rem;
   }
@@ -395,7 +410,7 @@
   }
 
   .login-card p{
-    color:#5C5340;
+    color:#B7C2E8;
     font-size:0.95rem;
     margin:0 0 1.4rem;
   }
@@ -448,6 +463,7 @@
 <div id="app-content" style="display:none;">
 
 <header class="banner">
+  <img src="https://i.postimg.cc/rmG38G4L/Oasisnobg.png" alt="Oasis Tracker logo" class="banner-logo">
   <h1>Oasis Tracker</h1>
   <p class="tagline">Items &middot; Gang House &middot; Warehouse 1 &middot; Warehouse 2</p>
   <div class="dune"></div>
