@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Oasis Tracker</title>
+<title>Oasis Items Trackers</title>
 <link rel="icon" type="image/png" href="https://i.postimg.cc/rmG38G4L/Oasisnobg.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -232,6 +232,7 @@
     padding:0.4rem 0.5rem;
     font-family:'IBM Plex Sans', sans-serif;
     font-size:0.85rem;
+    color:var(--teal-dark);
     background:#fff;
   }
 
@@ -310,7 +311,7 @@
     padding:0.25rem 0.3rem;
     font-family:'IBM Plex Sans', sans-serif;
     font-size:0.85rem;
-    color:var(--ink);
+    color:var(--teal-dark);
     background:#fff;
     -moz-appearance:textfield;
     appearance:textfield;
@@ -443,7 +444,7 @@
 
 <div id="login-screen" class="login-screen">
   <div class="login-card">
-    <h1>Oasis Tracker</h1>
+    <h1>Oasis Items Trackers</h1>
     <p>Log in with Discord to view and edit the tracker.</p>
     <button id="discord-login-btn" class="discord-btn">Log in with Discord</button>
     <p id="login-error" class="login-error"></p>
@@ -464,8 +465,7 @@
 
 <header class="banner">
   <img src="https://i.postimg.cc/rmG38G4L/Oasisnobg.png" alt="Oasis Tracker logo" class="banner-logo">
-  <h1>Oasis Tracker</h1>
-  <p class="tagline">Items &middot; Gang House &middot; Warehouse 1 &middot; Warehouse 2</p>
+  <h1>Oasis Items Trackers</h1>
   <div class="dune"></div>
 </header>
 
@@ -630,7 +630,7 @@
   async function loadLocations(){
     const { data: rows, error } = await sb
       .from('oasis_locations')
-      .select('id, name, position')
+      .select('id, name, position, rent_due')
       .order('position', { ascending: true });
     if(error){ console.error(error); return; }
     locations = rows || [];
@@ -730,6 +730,11 @@
     if(!name || !name.trim() || name.trim() === currentName) return;
     const { error } = await sb.from('oasis_locations').update({ name: name.trim() }).eq('id', locationId);
     if(error) alert('Could not rename tab: ' + error.message);
+  }
+
+  async function updateRentDue(locationId, rentDue){
+    const { error } = await sb.from('oasis_locations').update({ rent_due: rentDue }).eq('id', locationId);
+    if(error) alert('Could not update rent due date: ' + error.message);
   }
 
   function renderCatalogPanel(){
@@ -915,6 +920,38 @@
     head.appendChild(h2);
     wrap.appendChild(head);
 
+    // Rent Due date for this location
+    const location = locations.find(l => l.id === tab.id);
+    const rentRow = document.createElement('div');
+    rentRow.style.display = 'flex';
+    rentRow.style.alignItems = 'center';
+    rentRow.style.gap = '0.6rem';
+    rentRow.style.marginBottom = '1.2rem';
+
+    const rentLabel = document.createElement('span');
+    rentLabel.textContent = 'Rent Due:';
+    rentLabel.style.fontWeight = '600';
+    rentLabel.style.color = 'var(--ink)';
+    rentLabel.style.fontSize = '0.9rem';
+
+    const rentInput = document.createElement('input');
+    rentInput.type = 'date';
+    rentInput.value = location && location.rent_due ? location.rent_due : '';
+    rentInput.style.border = '1px solid var(--sand-dark)';
+    rentInput.style.borderRadius = '6px';
+    rentInput.style.padding = '0.4rem 0.5rem';
+    rentInput.style.fontFamily = "'IBM Plex Sans', sans-serif";
+    rentInput.style.fontSize = '0.85rem';
+    rentInput.style.color = 'var(--teal-dark)';
+    rentInput.style.background = '#fff';
+    rentInput.addEventListener('change', () => {
+      updateRentDue(tab.id, rentInput.value || null);
+    });
+
+    rentRow.appendChild(rentLabel);
+    rentRow.appendChild(rentInput);
+    wrap.appendChild(rentRow);
+
     // "Add item to this location" control -- flat list, pulled from the Items catalog
     const addRow = document.createElement('div');
     addRow.style.display = 'flex';
@@ -929,6 +966,7 @@
     select.style.borderRadius = '6px';
     select.style.border = '1px solid var(--sand-dark)';
     select.style.background = '#fff';
+    select.style.color = '#1E3A5F';
     select.style.fontFamily = "'IBM Plex Sans', sans-serif";
 
     const existingItemIds = new Set((locationItems[tab.id] || []).map(li => li.item_id));
