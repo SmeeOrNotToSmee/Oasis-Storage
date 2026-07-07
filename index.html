@@ -269,6 +269,61 @@
     accent-color:var(--teal);
   }
 
+  .modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(42,36,26,0.55);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:1000;
+    padding:1.5rem;
+  }
+
+  .modal-card{
+    background:var(--card);
+    border-radius:12px;
+    padding:1.8rem;
+    max-width:340px;
+    width:100%;
+    box-shadow:0 12px 30px rgba(0,0,0,0.3);
+  }
+
+  .modal-card p{
+    margin:0 0 1.4rem;
+    color:var(--ink);
+    font-size:0.95rem;
+    line-height:1.4;
+  }
+
+  .modal-actions{
+    display:flex;
+    gap:0.6rem;
+    justify-content:flex-end;
+  }
+
+  .modal-btn{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-weight:600;
+    font-size:0.88rem;
+    border:none;
+    border-radius:6px;
+    padding:0.55rem 1rem;
+    cursor:pointer;
+  }
+
+  .modal-btn-cancel{
+    background:var(--sand-dark);
+    color:var(--ink);
+  }
+  .modal-btn-cancel:hover{ background:#BBA87A; }
+
+  .modal-btn-danger{
+    background:var(--clay);
+    color:#fff;
+  }
+  .modal-btn-danger:hover{ background:var(--clay-dark); }
+
   footer{
     text-align:center;
     color:#8A7C5E;
@@ -343,6 +398,16 @@
   </div>
 </div>
 
+<div id="confirm-modal" class="modal-overlay" style="display:none;">
+  <div class="modal-card">
+    <p id="confirm-modal-message"></p>
+    <div class="modal-actions">
+      <button id="confirm-modal-cancel" class="modal-btn modal-btn-cancel">Cancel</button>
+      <button id="confirm-modal-confirm" class="modal-btn modal-btn-danger">Delete</button>
+    </div>
+  </div>
+</div>
+
 <div id="app-content" style="display:none;">
 
 <header class="banner">
@@ -382,6 +447,31 @@
   ];
   const ALL_TABS = [{ id: CATALOG_TAB_ID, label: 'Items' }, ...LOCATION_TABS];
 
+  function showConfirmModal(message){
+    return new Promise(resolve => {
+      const overlay = document.getElementById('confirm-modal');
+      const messageEl = document.getElementById('confirm-modal-message');
+      const cancelBtn = document.getElementById('confirm-modal-cancel');
+      const confirmBtn = document.getElementById('confirm-modal-confirm');
+
+      messageEl.textContent = message;
+      overlay.style.display = 'flex';
+
+      function cleanup(result){
+        overlay.style.display = 'none';
+        cancelBtn.removeEventListener('click', onCancel);
+        confirmBtn.removeEventListener('click', onConfirm);
+        resolve(result);
+      }
+      function onCancel(){ cleanup(false); }
+      function onConfirm(){ cleanup(true); }
+
+      cancelBtn.addEventListener('click', onCancel);
+      confirmBtn.addEventListener('click', onConfirm);
+    });
+  }
+
+  let catalogRemoveMode = false;
   let catalogItems = [];    // [{id, name}]  -- master flat item list
   let locationItems = {};   // { locationId: [{id (location_item row id), item_id, done, item:{id,name}}] }
   let activeTab = CATALOG_TAB_ID;
@@ -557,8 +647,25 @@
     addBtn.className = 'add-btn';
     addBtn.textContent = '+ Add Item';
     addBtn.addEventListener('click', addCatalogItem);
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'add-btn';
+    removeBtn.style.background = catalogRemoveMode ? 'var(--teal)' : 'var(--sand-dark)';
+    removeBtn.style.color = catalogRemoveMode ? '#fff' : 'var(--ink)';
+    removeBtn.textContent = catalogRemoveMode ? 'Done' : 'Remove Item';
+    removeBtn.addEventListener('click', () => {
+      catalogRemoveMode = !catalogRemoveMode;
+      render();
+    });
+
+    const btnGroup = document.createElement('div');
+    btnGroup.style.display = 'flex';
+    btnGroup.style.gap = '0.5rem';
+    btnGroup.appendChild(addBtn);
+    btnGroup.appendChild(removeBtn);
+
     head.appendChild(h2);
-    head.appendChild(addBtn);
+    head.appendChild(btnGroup);
     wrap.appendChild(head);
 
     if(catalogItems.length === 0){
@@ -584,12 +691,14 @@
     span.textContent = item.name;
     pill.appendChild(span);
 
-    const del = document.createElement('button');
-    del.className = 'icon-btn';
-    del.textContent = '✕';
-    del.title = 'Delete item';
-    del.addEventListener('click', () => deleteCatalogItem(item.id));
-    pill.appendChild(del);
+    if(catalogRemoveMode){
+      const del = document.createElement('button');
+      del.className = 'icon-btn';
+      del.textContent = '✕';
+      del.title = 'Delete item';
+      del.addEventListener('click', () => deleteCatalogItem(item.id, item.name));
+      pill.appendChild(del);
+    }
 
     return pill;
   }
@@ -705,8 +814,9 @@
     if(error) alert('Could not add item: ' + error.message);
   }
 
-  async function deleteCatalogItem(itemId){
-    if(!confirm('Delete this item from the catalog? This also removes it from any location tracking it.')) return;
+  async function deleteCatalogItem(itemId, itemName){
+    const confirmed = await showConfirmModal(`Delete "${itemName}" from the catalog? This also removes it from any location tracking it.`);
+    if(!confirmed) return;
     const { error } = await sb.from('oasis_items').delete().eq('id', itemId);
     if(error) alert('Could not delete item: ' + error.message);
   }
