@@ -440,12 +440,13 @@
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const CATALOG_TAB_ID = 'items';
-  const LOCATION_TABS = [
-    { id: 'gang-house', label: 'Gang House' },
-    { id: 'warehouse-1', label: 'Warehouse 1' },
-    { id: 'warehouse-2', label: 'Warehouse 2' }
-  ];
-  const ALL_TABS = [{ id: CATALOG_TAB_ID, label: 'Items' }, ...LOCATION_TABS];
+
+  let catalogRemoveMode = false;
+  let catalogItems = [];    // [{id, name}]  -- master flat item list
+  let locations = [];       // [{id, name, position}] -- location tabs, from the database
+  let locationItems = {};   // { locationId: [{id (location_item row id), item_id, done, item:{id,name}}] }
+  let activeTab = CATALOG_TAB_ID;
+  let realtimeChannel = null;
 
   function showConfirmModal(message){
     return new Promise(resolve => {
@@ -470,12 +471,6 @@
       confirmBtn.addEventListener('click', onConfirm);
     });
   }
-
-  let catalogRemoveMode = false;
-  let catalogItems = [];    // [{id, name}]  -- master flat item list
-  let locationItems = {};   // { locationId: [{id (location_item row id), item_id, done, item:{id,name}}] }
-  let activeTab = CATALOG_TAB_ID;
-  let realtimeChannel = null;
 
   const loginScreen = document.getElementById('login-screen');
   const appContent = document.getElementById('app-content');
@@ -578,17 +573,26 @@
     catalogItems = rows || [];
   }
 
+  async function loadLocations(){
+    const { data: rows, error } = await sb
+      .from('oasis_locations')
+      .select('id, name, position')
+      .order('position', { ascending: true });
+    if(error){ console.error(error); return; }
+    locations = rows || [];
+  }
+
   async function loadLocationItems(){
     const { data: rows, error } = await sb
       .from('oasis_location_items')
-      .select('id, location, item_id, done, oasis_items(id, name)')
+      .select('id, location_id, item_id, done, oasis_items(id, name)')
       .order('created_at', { ascending: true });
     if(error){ console.error(error); return; }
     locationItems = {};
-    LOCATION_TABS.forEach(t => locationItems[t.id] = []);
+    locations.forEach(l => locationItems[l.id] = []);
     (rows || []).forEach(row => {
-      if(!locationItems[row.location]) locationItems[row.location] = [];
-      locationItems[row.location].push({
+      if(!locationItems[row.location_id]) locationItems[row.location_id] = [];
+      locationItems[row.location_id].push({
         id: row.id,
         item_id: row.item_id,
         done: row.done,
@@ -598,6 +602,7 @@
   }
 
   async function loadAll(){
+    await loadLocations();
     await Promise.all([loadCatalog(), loadLocationItems()]);
     render();
   }
@@ -607,24 +612,40 @@
     if(realtimeChannel) return;
     realtimeChannel = sb.channel('oasis-tracker-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_items' }, loadAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_locations' }, loadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_location_items' }, loadAll)
       .subscribe();
   }
 
   // ---------- Rendering ----------
 
+
   function render(){
+    const allTabs = [{ id: CATALOG_TAB_ID, label: 'Items' }, ...locations.map(l => ({ id: l.id, label: l.name }))];
+
     tabsEl.innerHTML = '';
-    ALL_TABS.forEach(t => {
+    allTabs.forEach(t => {
       const btn = document.createElement('button');
       btn.textContent = t.label;
       if(t.id === activeTab) btn.classList.add('active');
       btn.addEventListener('click', () => { activeTab = t.id; render(); });
+      if(t.id !== CATALOG_TAB_ID){
+        btn.title = 'Double-click to rename';
+        btn.addEventListener('dblclick', () => renameLocation(t.id, t.label));
+      }
       tabsEl.appendChild(btn);
     });
 
+    const addTabBtn = document.createElement('button');
+    addTabBtn.textContent = '+';
+    addTabBtn.title = 'Add a new tab';
+    addTabBtn.style.fontWeight = '700';
+    addTabBtn.style.color = 'var(--teal)';
+    addTabBtn.addEventListener('click', addLocation);
+    tabsEl.appendChild(addTabBtn);
+
     panelsEl.innerHTML = '';
-    ALL_TABS.forEach(t => {
+    allTabs.forEach(t => {
       const panel = document.createElement('section');
       panel.className = 'panel' + (t.id === activeTab ? ' active' : '');
       if(t.id === CATALOG_TAB_ID){
@@ -634,6 +655,21 @@
       }
       panelsEl.appendChild(panel);
     });
+  }
+
+  async function addLocation(){
+    const name = prompt('Name for the new tab:');
+    if(!name || !name.trim()) return;
+    const nextPosition = locations.length > 0 ? Math.max(...locations.map(l => l.position)) + 1 : 0;
+    const { error } = await sb.from('oasis_locations').insert({ name: name.trim(), position: nextPosition });
+    if(error) alert('Could not add tab: ' + error.message);
+  }
+
+  async function renameLocation(locationId, currentName){
+    const name = prompt('Rename tab:', currentName);
+    if(!name || !name.trim() || name.trim() === currentName) return;
+    const { error } = await sb.from('oasis_locations').update({ name: name.trim() }).eq('id', locationId);
+    if(error) alert('Could not rename tab: ' + error.message);
   }
 
   function renderCatalogPanel(){
@@ -824,7 +860,7 @@
   // ---------- Mutations: per-location tracking ----------
 
   async function addItemToLocation(locationId, itemId){
-    const { error } = await sb.from('oasis_location_items').insert({ location: locationId, item_id: itemId });
+    const { error } = await sb.from('oasis_location_items').insert({ location_id: locationId, item_id: itemId });
     if(error) alert('Could not add item to this location: ' + error.message);
   }
 
