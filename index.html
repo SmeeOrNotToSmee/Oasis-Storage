@@ -738,16 +738,19 @@
     resultsEl.innerHTML = '';
 
     const trimmed = query.trim().toLowerCase();
-    const itemTotals = buildItemTotals();
 
-    let matchingNames;
     if(trimmed === ''){
-      matchingNames = catalogItems.map(i => i.name);
-    }else{
-      matchingNames = catalogItems
-        .filter(i => i.name.toLowerCase().includes(trimmed))
-        .map(i => i.name);
+      const hint = document.createElement('div');
+      hint.className = 'search-result-none';
+      hint.textContent = 'Start typing to search for an item...';
+      resultsEl.appendChild(hint);
+      return;
     }
+
+    const itemTotals = buildItemTotals();
+    const matchingNames = catalogItems
+      .filter(i => i.name.toLowerCase().includes(trimmed))
+      .map(i => i.name);
     matchingNames.sort((a, b) => a.localeCompare(b));
 
     if(matchingNames.length === 0){
