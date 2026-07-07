@@ -265,12 +265,37 @@
     white-space:nowrap;
   }
 
+  .qty-stepper{
+    display:flex;
+    align-items:center;
+    gap:0.35rem;
+  }
+
+  .qty-btn{
+    width:1.6rem;
+    height:1.6rem;
+    border-radius:50%;
+    border:none;
+    background:var(--teal);
+    color:#fff;
+    font-weight:700;
+    font-size:1rem;
+    line-height:1;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+  }
+  .qty-btn:hover{ background:var(--teal-dark); }
+  .qty-btn:active{ transform:scale(0.94); }
+
   .item-pill .qty-input{
-    width:3.2rem;
+    width:2.6rem;
     text-align:center;
     border:1px solid var(--sand-dark);
     border-radius:999px;
-    padding:0.25rem 0.3rem;
+    padding:0.25rem 0.2rem;
     font-family:'IBM Plex Sans', sans-serif;
     font-size:0.85rem;
     color:var(--ink);
@@ -452,6 +477,7 @@
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const CATALOG_TAB_ID = 'items';
+  const TOTALS_TAB_ID = 'totals';
 
   let catalogRemoveMode = false;
   let catalogItems = [];    // [{id, name}]  -- master flat item list
@@ -633,7 +659,11 @@
 
 
   function render(){
-    const allTabs = [{ id: CATALOG_TAB_ID, label: 'Items' }, ...locations.map(l => ({ id: l.id, label: l.name }))];
+    const allTabs = [
+      { id: CATALOG_TAB_ID, label: 'Items' },
+      { id: TOTALS_TAB_ID, label: 'Totals' },
+      ...locations.map(l => ({ id: l.id, label: l.name }))
+    ];
 
     tabsEl.innerHTML = '';
     allTabs.forEach(t => {
@@ -641,7 +671,7 @@
       btn.textContent = t.label;
       if(t.id === activeTab) btn.classList.add('active');
       btn.addEventListener('click', () => { activeTab = t.id; render(); });
-      if(t.id !== CATALOG_TAB_ID){
+      if(t.id !== CATALOG_TAB_ID && t.id !== TOTALS_TAB_ID){
         btn.title = 'Double-click to rename';
         btn.addEventListener('dblclick', () => renameLocation(t.id, t.label));
       }
@@ -662,6 +692,8 @@
       panel.className = 'panel' + (t.id === activeTab ? ' active' : '');
       if(t.id === CATALOG_TAB_ID){
         panel.appendChild(renderCatalogPanel());
+      }else if(t.id === TOTALS_TAB_ID){
+        panel.appendChild(renderTotalsPanel());
       }else{
         panel.appendChild(renderLocationPanel(t));
       }
@@ -751,6 +783,111 @@
     return pill;
   }
 
+  function renderTotalsPanel(){
+    const wrap = document.createElement('div');
+
+    const head = document.createElement('div');
+    head.className = 'panel-head';
+    const h2 = document.createElement('h2');
+    h2.textContent = 'Totals';
+    head.appendChild(h2);
+    wrap.appendChild(head);
+
+    // Build: itemId -> { name, byLocation: [{locationName, qty}], total }
+    const itemTotals = {};
+    locations.forEach(loc => {
+      (locationItems[loc.id] || []).forEach(entry => {
+        if(!entry.item) return;
+        const id = entry.item.id;
+        if(!itemTotals[id]){
+          itemTotals[id] = { name: entry.item.name, byLocation: [], total: 0 };
+        }
+        const qty = entry.quantity || 0;
+        itemTotals[id].byLocation.push({ locationName: loc.name, qty });
+        itemTotals[id].total += qty;
+      });
+    });
+
+    const itemIds = Object.keys(itemTotals).sort((a, b) =>
+      itemTotals[a].name.localeCompare(itemTotals[b].name)
+    );
+
+    if(itemIds.length === 0){
+      const empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = 'Nothing tracked yet. Add items to a location tab to see totals here.';
+      wrap.appendChild(empty);
+      return wrap;
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'categories';
+
+    let grandTotal = 0;
+    itemIds.forEach(id => {
+      const entry = itemTotals[id];
+      grandTotal += entry.total;
+      grid.appendChild(renderTotalsCard(entry));
+    });
+    wrap.appendChild(grid);
+
+    const grandTotalRow = document.createElement('div');
+    grandTotalRow.style.marginTop = '1.4rem';
+    grandTotalRow.style.textAlign = 'right';
+    grandTotalRow.style.fontFamily = "'Fraunces', serif";
+    grandTotalRow.style.fontSize = '1.05rem';
+    grandTotalRow.style.color = 'var(--ink)';
+    grandTotalRow.textContent = `Grand Total (all items): ${grandTotal}`;
+    wrap.appendChild(grandTotalRow);
+
+    return wrap;
+  }
+
+  function renderTotalsCard(entry){
+    const card = document.createElement('div');
+    card.className = 'category';
+
+    const top = document.createElement('div');
+    top.className = 'category-top';
+    const h3 = document.createElement('h3');
+    h3.textContent = entry.name;
+    top.appendChild(h3);
+    card.appendChild(top);
+
+    const ul = document.createElement('ul');
+    ul.className = 'items';
+    entry.byLocation.forEach(loc => {
+      const li = document.createElement('li');
+      const span = document.createElement('span');
+      span.textContent = loc.locationName;
+      const qtySpan = document.createElement('span');
+      qtySpan.style.marginLeft = 'auto';
+      qtySpan.style.fontWeight = '600';
+      qtySpan.textContent = loc.qty;
+      li.appendChild(span);
+      li.appendChild(qtySpan);
+      ul.appendChild(li);
+    });
+    card.appendChild(ul);
+
+    const totalRow = document.createElement('div');
+    totalRow.style.borderTop = '1px solid var(--sand-dark)';
+    totalRow.style.marginTop = '0.4rem';
+    totalRow.style.paddingTop = '0.5rem';
+    totalRow.style.display = 'flex';
+    totalRow.style.justifyContent = 'space-between';
+    totalRow.style.fontWeight = '700';
+    totalRow.style.fontSize = '0.9rem';
+    const totalLabel = document.createElement('span');
+    totalLabel.textContent = 'Total';
+    const totalValue = document.createElement('span');
+    totalValue.textContent = entry.total;
+    totalRow.appendChild(totalLabel);
+    totalRow.appendChild(totalValue);
+    card.appendChild(totalRow);
+
+    return card;
+  }
 
   function renderLocationPanel(tab){
     const wrap = document.createElement('div');
@@ -837,18 +974,49 @@
     span.textContent = entry.item ? entry.item.name : '(deleted item)';
     pill.appendChild(span);
 
+    const stepper = document.createElement('div');
+    stepper.className = 'qty-stepper';
+
     const qty = document.createElement('input');
     qty.type = 'number';
     qty.className = 'qty-input';
     qty.min = '0';
     qty.value = entry.quantity ?? 0;
-    qty.addEventListener('change', () => {
-      let val = parseInt(qty.value, 10);
+
+    function commitValue(val){
       if(isNaN(val) || val < 0) val = 0;
       qty.value = val;
       updateLocationItemQuantity(entry.id, val);
+    }
+
+    const minusBtn = document.createElement('button');
+    minusBtn.className = 'qty-btn';
+    minusBtn.type = 'button';
+    minusBtn.textContent = '−';
+    minusBtn.title = 'Decrease';
+    minusBtn.addEventListener('click', () => {
+      const current = parseInt(qty.value, 10) || 0;
+      commitValue(current - 1);
     });
-    pill.appendChild(qty);
+
+    const plusBtn = document.createElement('button');
+    plusBtn.className = 'qty-btn';
+    plusBtn.type = 'button';
+    plusBtn.textContent = '+';
+    plusBtn.title = 'Increase';
+    plusBtn.addEventListener('click', () => {
+      const current = parseInt(qty.value, 10) || 0;
+      commitValue(current + 1);
+    });
+
+    qty.addEventListener('change', () => {
+      commitValue(parseInt(qty.value, 10));
+    });
+
+    stepper.appendChild(minusBtn);
+    stepper.appendChild(qty);
+    stepper.appendChild(plusBtn);
+    pill.appendChild(stepper);
 
     const rm = document.createElement('button');
     rm.className = 'icon-btn';
