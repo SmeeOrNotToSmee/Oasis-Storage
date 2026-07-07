@@ -243,6 +243,32 @@
     border-radius:10px;
   }
 
+  .item-pill-grid{
+    display:flex;
+    flex-wrap:wrap;
+    gap:0.7rem;
+  }
+
+  .item-pill{
+    display:flex;
+    align-items:center;
+    gap:0.5rem;
+    background:var(--card);
+    border:1px solid var(--sand-dark);
+    border-radius:999px;
+    padding:0.55rem 0.6rem 0.55rem 1rem;
+    font-size:0.9rem;
+    color:var(--ink);
+  }
+
+  .item-pill span{
+    white-space:nowrap;
+  }
+
+  .item-pill input[type="checkbox"]{
+    accent-color:var(--teal);
+  }
+
   footer{
     text-align:center;
     color:#8A7C5E;
@@ -356,8 +382,8 @@
   ];
   const ALL_TABS = [{ id: CATALOG_TAB_ID, label: 'Items' }, ...LOCATION_TABS];
 
-  let categories = [];      // [{id, name, items:[{id, name}]}]  -- master catalog
-  let locationItems = {};   // { locationId: [{id (location_item row id), item_id, done, item:{id,name,category_id}}] }
+  let catalogItems = [];    // [{id, name}]  -- master flat item list
+  let locationItems = {};   // { locationId: [{id (location_item row id), item_id, done, item:{id,name}}] }
   let activeTab = CATALOG_TAB_ID;
   let realtimeChannel = null;
 
@@ -454,21 +480,18 @@
   // ---------- Data loading ----------
 
   async function loadCatalog(){
-    const { data: cats, error } = await sb
-      .from('oasis_categories')
-      .select('id, name, oasis_items(id, name, created_at)')
+    const { data: rows, error } = await sb
+      .from('oasis_items')
+      .select('id, name, created_at')
       .order('created_at', { ascending: true });
     if(error){ console.error(error); return; }
-    categories = (cats || []).map(c => ({
-      ...c,
-      items: (c.oasis_items || []).slice().sort((a,b) => new Date(a.created_at) - new Date(b.created_at))
-    }));
+    catalogItems = rows || [];
   }
 
   async function loadLocationItems(){
     const { data: rows, error } = await sb
       .from('oasis_location_items')
-      .select('id, location, item_id, done, oasis_items(id, name, category_id, oasis_categories(id, name))')
+      .select('id, location, item_id, done, oasis_items(id, name)')
       .order('created_at', { ascending: true });
     if(error){ console.error(error); return; }
     locationItems = {};
@@ -493,7 +516,6 @@
     loadAll();
     if(realtimeChannel) return;
     realtimeChannel = sb.channel('oasis-tracker-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_categories' }, loadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_items' }, loadAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oasis_location_items' }, loadAll)
       .subscribe();
@@ -533,86 +555,45 @@
     h2.textContent = 'Items';
     const addBtn = document.createElement('button');
     addBtn.className = 'add-btn';
-    addBtn.textContent = '+ Add Category';
-    addBtn.addEventListener('click', addCategory);
+    addBtn.textContent = '+ Add Item';
+    addBtn.addEventListener('click', addCatalogItem);
     head.appendChild(h2);
     head.appendChild(addBtn);
     wrap.appendChild(head);
 
-    if(categories.length === 0){
+    if(catalogItems.length === 0){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.textContent = 'No categories yet. Click "Add Category" to start building your item list.';
+      empty.textContent = 'No items yet. Click "Add Item" to start building your list.';
       wrap.appendChild(empty);
       return wrap;
     }
 
     const grid = document.createElement('div');
-    grid.className = 'categories';
-    categories.forEach(cat => grid.appendChild(renderCatalogCategory(cat)));
+    grid.className = 'item-pill-grid';
+    catalogItems.forEach(item => grid.appendChild(renderCatalogPill(item)));
     wrap.appendChild(grid);
     return wrap;
   }
 
-  function renderCatalogCategory(cat){
-    const card = document.createElement('div');
-    card.className = 'category';
+  function renderCatalogPill(item){
+    const pill = document.createElement('div');
+    pill.className = 'item-pill';
 
-    const top = document.createElement('div');
-    top.className = 'category-top';
-    const h3 = document.createElement('h3');
-    h3.textContent = cat.name;
+    const span = document.createElement('span');
+    span.textContent = item.name;
+    pill.appendChild(span);
+
     const del = document.createElement('button');
     del.className = 'icon-btn';
     del.textContent = '✕';
-    del.title = 'Delete category (and its items)';
-    del.addEventListener('click', () => deleteCategory(cat.id));
-    top.appendChild(h3);
-    top.appendChild(del);
-    card.appendChild(top);
+    del.title = 'Delete item';
+    del.addEventListener('click', () => deleteCatalogItem(item.id));
+    pill.appendChild(del);
 
-    const ul = document.createElement('ul');
-    ul.className = 'items';
-    cat.items.forEach(item => {
-      const li = document.createElement('li');
-      const span = document.createElement('span');
-      span.textContent = item.name;
-      const rm = document.createElement('button');
-      rm.className = 'icon-btn';
-      rm.textContent = '✕';
-      rm.style.marginLeft = 'auto';
-      rm.title = 'Delete item from catalog';
-      rm.addEventListener('click', () => deleteCatalogItem(item.id));
-      li.appendChild(span);
-      li.appendChild(rm);
-      ul.appendChild(li);
-    });
-    card.appendChild(ul);
-
-    const form = document.createElement('div');
-    form.className = 'item-form';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = 'Add item...';
-    const addItemBtn = document.createElement('button');
-    addItemBtn.textContent = 'Add';
-
-    function submitItem(){
-      const val = input.value.trim();
-      if(!val) return;
-      addCatalogItem(cat.id, val);
-      input.value = '';
-    }
-
-    addItemBtn.addEventListener('click', submitItem);
-    input.addEventListener('keydown', e => { if(e.key === 'Enter') submitItem(); });
-
-    form.appendChild(input);
-    form.appendChild(addItemBtn);
-    card.appendChild(form);
-
-    return card;
+    return pill;
   }
+
 
   function renderLocationPanel(tab){
     const wrap = document.createElement('div');
@@ -624,7 +605,7 @@
     head.appendChild(h2);
     wrap.appendChild(head);
 
-    // "Add item to this location" control
+    // "Add item to this location" control -- flat list, pulled from the Items catalog
     const addRow = document.createElement('div');
     addRow.style.display = 'flex';
     addRow.style.gap = '0.5rem';
@@ -641,36 +622,29 @@
     select.style.fontFamily = "'IBM Plex Sans', sans-serif";
 
     const existingItemIds = new Set((locationItems[tab.id] || []).map(li => li.item_id));
-    let hasOptions = false;
-    categories.forEach(cat => {
-      const available = cat.items.filter(i => !existingItemIds.has(i.id));
-      if(available.length === 0) return;
-      const optgroup = document.createElement('optgroup');
-      optgroup.label = cat.name;
-      available.forEach(i => {
-        const opt = document.createElement('option');
-        opt.value = i.id;
-        opt.textContent = i.name;
-        optgroup.appendChild(opt);
-      });
-      select.appendChild(optgroup);
-      hasOptions = true;
-    });
+    const available = catalogItems.filter(i => !existingItemIds.has(i.id));
 
-    if(!hasOptions){
+    if(available.length === 0){
       const opt = document.createElement('option');
-      opt.textContent = categories.length === 0
+      opt.textContent = catalogItems.length === 0
         ? 'Add items in the Items tab first'
         : 'All catalog items already added here';
       opt.disabled = true;
       select.appendChild(opt);
       select.disabled = true;
+    }else{
+      available.forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i.id;
+        opt.textContent = i.name;
+        select.appendChild(opt);
+      });
     }
 
     const addBtn = document.createElement('button');
     addBtn.className = 'add-btn';
     addBtn.textContent = '+ Add to ' + tab.label;
-    addBtn.disabled = !hasOptions;
+    addBtn.disabled = available.length === 0;
     addBtn.addEventListener('click', () => {
       const itemId = select.value;
       if(!itemId) return;
@@ -690,79 +664,44 @@
       return wrap;
     }
 
-    // Group this location's items by their catalog category
-    const byCategory = {};
-    items.forEach(li => {
-      const catName = (li.item && li.item.oasis_categories && li.item.oasis_categories.name) || 'Uncategorized';
-      if(!byCategory[catName]) byCategory[catName] = [];
-      byCategory[catName].push(li);
-    });
-
     const grid = document.createElement('div');
-    grid.className = 'categories';
-    Object.keys(byCategory).forEach(catName => {
-      grid.appendChild(renderLocationCategoryCard(catName, byCategory[catName]));
-    });
+    grid.className = 'item-pill-grid';
+    items.forEach(entry => grid.appendChild(renderLocationPill(entry)));
     wrap.appendChild(grid);
 
     return wrap;
   }
 
-  function renderLocationCategoryCard(catName, entries){
-    const card = document.createElement('div');
-    card.className = 'category';
+  function renderLocationPill(entry){
+    const pill = document.createElement('div');
+    pill.className = 'item-pill';
 
-    const top = document.createElement('div');
-    top.className = 'category-top';
-    const h3 = document.createElement('h3');
-    h3.textContent = catName;
-    top.appendChild(h3);
-    card.appendChild(top);
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = entry.done;
+    cb.addEventListener('change', () => toggleLocationItem(entry.id, cb.checked));
+    pill.appendChild(cb);
 
-    const ul = document.createElement('ul');
-    ul.className = 'items';
-    entries.forEach(entry => {
-      const li = document.createElement('li');
-      if(entry.done) li.classList.add('done');
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = entry.done;
-      cb.addEventListener('change', () => toggleLocationItem(entry.id, cb.checked));
-      const span = document.createElement('span');
-      span.textContent = entry.item ? entry.item.name : '(deleted item)';
-      const rm = document.createElement('button');
-      rm.className = 'icon-btn';
-      rm.textContent = '✕';
-      rm.style.marginLeft = 'auto';
-      rm.title = 'Remove from this location';
-      rm.addEventListener('click', () => removeItemFromLocation(entry.id));
-      li.appendChild(cb);
-      li.appendChild(span);
-      li.appendChild(rm);
-      ul.appendChild(li);
-    });
-    card.appendChild(ul);
+    const span = document.createElement('span');
+    span.textContent = entry.item ? entry.item.name : '(deleted item)';
+    pill.appendChild(span);
 
-    return card;
+    const rm = document.createElement('button');
+    rm.className = 'icon-btn';
+    rm.textContent = '✕';
+    rm.title = 'Remove from this location';
+    rm.addEventListener('click', () => removeItemFromLocation(entry.id));
+    pill.appendChild(rm);
+
+    return pill;
   }
 
   // ---------- Mutations: catalog ----------
 
-  async function addCategory(){
-    const name = prompt('Category name:');
+  async function addCatalogItem(){
+    const name = prompt('Item name:');
     if(!name || !name.trim()) return;
-    const { error } = await sb.from('oasis_categories').insert({ name: name.trim() });
-    if(error) alert('Could not add category: ' + error.message);
-  }
-
-  async function deleteCategory(categoryId){
-    if(!confirm('Delete this category and all its items? This also removes them from any location that has them.')) return;
-    const { error } = await sb.from('oasis_categories').delete().eq('id', categoryId);
-    if(error) alert('Could not delete category: ' + error.message);
-  }
-
-  async function addCatalogItem(categoryId, name){
-    const { error } = await sb.from('oasis_items').insert({ category_id: categoryId, name });
+    const { error } = await sb.from('oasis_items').insert({ name: name.trim() });
     if(error) alert('Could not add item: ' + error.message);
   }
 
