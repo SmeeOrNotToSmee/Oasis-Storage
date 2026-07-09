@@ -685,6 +685,7 @@
   let catalogRemoveMode = false;
   let catalogItems = [];    // [{id, name}]  -- master flat item list
   let locations = [];       // [{id, name, position}] -- location tabs, from the database
+  let locationItemSearch = {}; // { locationId: 'current search text' } -- per-tab item filter
   let locationItems = {};   // { locationId: [{id (location_item row id), item_id, done, item:{id,name}}] }
   let activeTab = CATALOG_TAB_ID;
   let realtimeChannel = null;
@@ -1431,6 +1432,7 @@
     wrap.appendChild(addRow);
 
     const items = locationItems[tab.id] || [];
+
     if(items.length === 0){
       const empty = document.createElement('div');
       empty.className = 'empty-state';
@@ -1439,10 +1441,43 @@
       return wrap;
     }
 
-    const grid = document.createElement('div');
-    grid.className = 'location-item-grid';
-    items.forEach(entry => grid.appendChild(renderLocationPill(entry)));
-    wrap.appendChild(grid);
+    // Search box to filter the items already tracked in this tab
+    const itemSearchInput = document.createElement('input');
+    itemSearchInput.type = 'text';
+    itemSearchInput.className = 'modal-input';
+    itemSearchInput.style.marginBottom = '1rem';
+    itemSearchInput.placeholder = 'Search items in ' + tab.label + '...';
+    itemSearchInput.value = locationItemSearch[tab.id] || '';
+    wrap.appendChild(itemSearchInput);
+
+    const gridContainer = document.createElement('div');
+    wrap.appendChild(gridContainer);
+
+    function renderFilteredGrid(){
+      const query = itemSearchInput.value.trim().toLowerCase();
+      locationItemSearch[tab.id] = itemSearchInput.value;
+      gridContainer.innerHTML = '';
+
+      const filtered = query === ''
+        ? items
+        : items.filter(entry => entry.item && entry.item.name.toLowerCase().includes(query));
+
+      if(filtered.length === 0){
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = 'No items match that search.';
+        gridContainer.appendChild(empty);
+        return;
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'location-item-grid';
+      filtered.forEach(entry => grid.appendChild(renderLocationPill(entry)));
+      gridContainer.appendChild(grid);
+    }
+
+    itemSearchInput.addEventListener('input', renderFilteredGrid);
+    renderFilteredGrid();
 
     return wrap;
   }
